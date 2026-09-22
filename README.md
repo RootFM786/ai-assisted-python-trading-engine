@@ -18,7 +18,7 @@ AI was an engineering assistant during development, not a runtime decision-maker
 
 The public repository preserves the real orchestration, configuration, data, state, audit and verification structure. Strategy decision providers retain their genuine contracts and lifecycle positions, but their production predicates are intentionally withheld.
 
-![Engine architecture](assets/04-engine-architecture.png)
+![Engine architecture](https://github.com/RootFM786/ai-assisted-python-trading-engine/raw/5906aba9e65757a992070d931c49a62e2e259b59/assets/04-engine-architecture.png)
 
 See [architecture documentation](docs/architecture.md) and the [public contract index](docs/contracts/public-contract-index.md).
 
@@ -36,7 +36,7 @@ See [architecture documentation](docs/architecture.md) and the [public contract 
 
 AI support was used to extract requirements, challenge ambiguities, draft/refine module contracts, support implementation, investigate failures and review deterministic outputs. Human review, frozen contracts, audit output and repeatable checks remained the control layer.
 
-![AI-assisted development workflow](assets/05-ai-assisted-development-workflow.png)
+![AI-assisted development workflow](https://github.com/RootFM786/ai-assisted-python-trading-engine/raw/5906aba9e65757a992070d931c49a62e2e259b59/assets/05-ai-assisted-development-workflow.png)
 
 Read the [AI-assisted development workflow](docs/ai-assisted-development.md) and [AI prompting and engineering notes](docs/ai-prompt-engineering.md).
 
@@ -71,11 +71,11 @@ PYTHONPATH=src python tools/verify_realised_r.py examples/sample-output/verifica
 PYTHONPATH=src python tools/verify_outcomes_against_m5.py examples/sample-output/outcome_verification_log.synthetic.csv examples/data/synthetic_m5.csv
 ```
 
-![Public test suite passing](assets/01-tests-passing.png)
+![Public test suite passing](https://github.com/RootFM786/ai-assisted-python-trading-engine/raw/5906aba9e65757a992070d931c49a62e2e259b59/assets/01-tests-passing.png)
 
-![Synthetic engine run](assets/02-synthetic-engine-run.png)
+![Synthetic engine run](https://github.com/RootFM786/ai-assisted-python-trading-engine/raw/5906aba9e65757a992070d931c49a62e2e259b59/assets/02-synthetic-engine-run.png)
 
-![Synthetic verification output](assets/03-verification-output.png)
+![Synthetic verification output](https://github.com/RootFM786/ai-assisted-python-trading-engine/raw/5906aba9e65757a992070d931c49a62e2e259b59/assets/03-verification-output.png)
 
 The examples use synthetic market data and representative output only. See [validation documentation](docs/validation.md).
 
@@ -83,19 +83,19 @@ The examples use synthetic market data and representative output only. See [vali
 
 These selected and redacted captures are historical implementation evidence from the development process. They are not performance promises, investment advice or a basis for reproducing the private strategy.
 
-![Historical backtest summary](assets/historical/historical-backtest-summary.jpg)
+![Historical backtest summary](https://github.com/RootFM786/ai-assisted-python-trading-engine/raw/5906aba9e65757a992070d931c49a62e2e259b59/assets/historical/historical-backtest-summary.jpg)
 
 *Historical aggregated backtest output from iterative engine validation. Historical development evidence only; not indicative of future performance.*
 
-![Historical multi-year validation](assets/historical/historical-multiyear-validation.jpg)
+![Historical multi-year validation](https://github.com/RootFM786/ai-assisted-python-trading-engine/raw/5906aba9e65757a992070d931c49a62e2e259b59/assets/historical/historical-multiyear-validation.jpg)
 
 *Multi-year historical test summary used to assess consistency across annual samples. Historical development evidence only; not indicative of future performance.*
 
-![Historical MT5 runtime](assets/historical/historical-mt5-runtime.jpg)
+![Historical MT5 runtime](https://github.com/RootFM786/ai-assisted-python-trading-engine/raw/5906aba9e65757a992070d931c49a62e2e259b59/assets/historical/historical-mt5-runtime.jpg)
 
 *MT5-connected runner processing market data during multi-instrument development testing. Historical development evidence only; not indicative of future performance.*
 
-![Historical AI research](assets/historical/historical-ai-research.jpg)
+![Historical AI research](https://github.com/RootFM786/ai-assisted-python-trading-engine/raw/5906aba9e65757a992070d931c49a62e2e259b59/assets/historical/historical-ai-research.jpg)
 
 *AI-assisted requirements research for external-data integration and backtest/forward-run consistency. Historical development evidence only; not indicative of future performance.*
 
