@@ -1,0 +1,3 @@
+Entry price,Stop loss,RR (entry to target),Risk (R),Target result (points),Final outcome,Exit timestamp
+100.0,99.0,1.5,1.0,1.5,win,2025-01-01T00:10:00Z
+100.0,99.0,1.0,1.0,0.0,loss,2025-01-01T00:15:00Z

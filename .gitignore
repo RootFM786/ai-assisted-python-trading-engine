@@ -1,0 +1,30 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Local/private market data
+data/*.csv
+data/**/*.csv
+
+# Generated runs
+runs/
+Runs/
+New_Runs/
+*.log
+
+# Credentials/local config
+.env
+.env.*
+config/local*.json
+**/*credentials*.json
+**/*secret*.json
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

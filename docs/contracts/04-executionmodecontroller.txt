@@ -1,0 +1,177 @@
+SECTION B — CURSOR-READY CONTRACT (IMPLEMENTATION)
+
+B1) Contract Header
+• Contract Name: ExecutionModeController
+• Contract Type: Swappable
+• Stage-2 Bucket: C (SWAPPABLE MODULES — FIXED INTERFACES)
+• Slot Name: ExecutionModeController
+• Determinism Level: Absolute
+
+
+
+B2) Purpose (max 2 sentences)
+Classify the run’s execution_mode into finite vs indefinite semantics and expose mode-tied run-lifetime flags that downstream orchestration uses to enforce EOF expectations and startup-idle rules. Define mode-law constraints without owning phase logic, pointer advancement, trade decisions, or outcome simulation.
+
+──────────────────────────────────────────────────────────────────
+NAVIGATION SUMMARY (NON-BINDING; ADD-ONLY) — Contract 4 (patched)
+Inserted: 2026-02-16T22:31:18Z (UTC)
+Purpose: Provide a names-only navigation index for explicit callable surfaces + top-level runtime IO.
+Governing text: If any conflict exists, the underlying contract B-sections govern.
+
+NON-BINDING navigation summary; if any conflict exists, the underlying B3/B4/B5/B6/B7 contract text governs.
+
+NAV_CALLABLES_AND_INVOKED_SERVICES (names/signatures as explicitly written)
+  • (No callable signature declared; module is invoked once per run by RunHarness as orchestration Step 4 — see B3/B5)
+
+NAV_TOP_LEVEL_INPUTS (index; names only; sourced from explicit interface surfaces)
+External call inputs:
+  • ExecutionModeInput
+
+Run-context inputs (initialization; read-only for run duration):
+  • None explicitly declared in Contract 4 (patched)
+
+Injected dependency inputs:
+  • None explicitly declared in Contract 4 (patched)
+
+Derived engine time primitives:
+  • None explicitly declared in Contract 4 (patched)
+
+NAV_TOP_LEVEL_OUTPUTS (index; names only; sourced from explicit return declarations)
+Return objects:
+  • ExecutionModeContext
+
+NAV_SCHEMAS_AND_RECORDS_REFERENCED (index; names only; sourced from IO typing/return declarations)
+  • ExecutionModeInput
+  • ExecutionModeContext
+
+END OF NAVIGATION SUMMARY (NON-BINDING)
+
+──────────────────────────────────────────────────────────────────
+
+
+B3) Inputs (explicit interface)
+Invocation timing:
+• Invoked by RunHarness & Orchestration as orchestration Step 4 (per-run).
+
+ExecutionModeInput (from RunHarness) (LOCKED interface)
+• execution_mode: string enum ∈ {backtest, replay, demo, live} (REQUIRED)
+• evaluation_start_timestamp: string (OPTIONAL; pass-through)
+• evaluation_end_timestamp: string (OPTIONAL; pass-through)
+
+State refs:
+• None. This module MUST NOT require or mutate shared execution state.
+
+Config keys:
+• None consumed directly. (Upstream ConfigResolver may populate the run’s boundary values, but this module receives them only via ExecutionModeInput.)
+
+
+
+B4) Outputs (explicit interface)
+ExecutionModeContext (returned to RunHarness) (LOCKED interface)
+The ExecutionModeController MUST return an ExecutionModeContext object containing:
+• execution_mode: string (REQUIRED)
+• is_finite: boolean (REQUIRED)
+  – true for backtest/replay
+  – false for demo/live
+• eof_expected: boolean (REQUIRED)
+  – true for backtest/replay
+  – false for demo/live
+• allow_idle_start_no_candle: boolean (REQUIRED)
+  – true ONLY for demo/live (startup may idle if no candle has arrived yet)
+  – false for backtest/replay
+• evaluation_start_timestamp: string (OPTIONAL; pass-through unchanged)
+• evaluation_end_timestamp: string (OPTIONAL; pass-through unchanged)
+
+State mutations:
+• None.
+
+Events / signals:
+• None.
+
+Owned log writes:
+• None. (This module does not own any sink.)
+
+
+
+B5) Execution Timing & Invocation
+Cadence:
+• Per-run only (constructed and invoked once per run).
+
+Invocation order constraint:
+• MUST be invoked as Step 4 in RunHarness orchestration order (after ConfigResolver, before LoggerSink construction and DataAdapter construction).
+
+Consumption / enforcement placement (RunHarness-owned):
+• RunHarness MUST use ExecutionModeContext to enforce:
+  – finite vs indefinite EOF rules
+  – demo/live startup idle rule
+  – finite-mode hard-fail conditions explicitly described for the run loop boundary (e.g., finite-mode startup empty-stream rule)
+
+
+
+B6) Hard Guarantees
+Replay semantic identity (LOCKED):
+• For V1, replay is semantically identical to backtest execution.
+• Any reference to “replay” MUST be interpreted as backtest execution operating on a finite adapter-provided historical candle stream, with no special-case replay behavior.
+
+Finite vs indefinite classification (LOCKED):
+• backtest/replay are finite modes (is_finite = true; eof_expected = true).
+• demo/live are indefinite modes (is_finite = false; eof_expected = false).
+
+EOF definition boundary (LOCKED; from V1 Gap Handling Policy):
+• EOF occurs when the active adapter explicitly signals completion of a finite stream (backtest/replay/CSV replay).
+• Live/Demo does not define EOF; loss of candles in live/demo is handled as a missing-candle condition.
+
+Clean-start assumption (LOCKED; from V1 Gap Handling Policy):
+• On process start, the engine initializes into a clean execution state and does not attempt to detect, resume, reconcile, or manage trades opened prior to this process start.
+
+Pass-through boundary guarantee (LOCKED interface):
+• evaluation_start_timestamp and evaluation_end_timestamp are pass-through fields in ExecutionModeContext and MUST be returned unchanged if supplied in ExecutionModeInput.
+
+
+
+B7) Hard Prohibitions
+This module MUST NOT:
+• read logs as inputs (directly or indirectly)
+• query wall-clock/system time or data sources
+• fabricate, interpolate, bridge, or infer missing candles, timestamps, or boundaries
+• reinterpret, normalize, parse, or timezone-shift evaluation_start_timestamp / evaluation_end_timestamp (pass-through only)
+• synthesize EOF or convert indefinite modes into finite semantics
+• implement phase logic, pointer advancement, scan suspension/resume rules, trade state, entry/exit decisions, or outcome simulation
+• mutate unrelated execution state or special-case other modules
+• introduce defaults or “best guesses” for any behaviour that is UNDEFINED IN AUTHORITY
+
+
+
+B8) Swappability Rules (Swappable)
+Fixed interface (LOCKED):
+• The ExecutionModeInput → ExecutionModeContext interface shape and required flags are fixed as listed in B3/B4 and MUST NOT drift across implementations.
+
+Replaceable implementation:
+• Any implementation behind this slot MUST:
+  – produce the same ExecutionModeContext fields with identical meanings
+  – not require additional inputs or shared state
+  – not embed strategy logic or phase logic
+
+No engine special-casing:
+• The RunHarness/engine MUST NOT branch on implementation identity; it may only consume the ExecutionModeContext fields.
+
+
+
+B9) Failure Modes
+Fatal (halt run; mark run INVALID):
+• ExecutionModeController cannot be constructed or invoked at orchestration Step 4.
+• ExecutionModeInput.execution_mode is missing or not one of {backtest, replay, demo, live}.
+• Backtest / Replay startup empty-stream rule (LOCKED):
+  – If, after applying execution-start gating, the engine receives zero adapter-provided fully closed candles in evaluation scope, the run MUST hard-fail and be marked INVALID.
+• ExecutionModeController fails to return a valid ExecutionModeContext containing all required fields.
+• Any downstream component attempts to treat demo/live as finite or to synthesize/assume EOF in demo/live.
+
+UNDEFINED IN AUTHORITY → HARD FAIL IF REACHED (no defaults):
+• Failure-outcome handling for the case where an adapter incorrectly emits an explicit EOFEvent in demo/live is not explicitly defined as a mandatory deterministic outcome in authoritative text; therefore, if this condition is encountered at runtime and requires a deterministic resolution decision, the run MUST hard-fail rather than invent a response.
+
+UNDEFINED IN AUTHORITY → HARD FAIL IF REACHED (no defaults):
+• Any deterministic criteria for deciding when to “hard-stop the bot process if safety requires” (live/demo violation handling language) are not explicitly defined as deterministic rules; therefore, this module MUST NOT implement discretionary safety criteria, and any attempt to require deterministic “safety requires” decision logic MUST hard-fail rather than invent it.
+
+
+
+—— END CONTRACT ——

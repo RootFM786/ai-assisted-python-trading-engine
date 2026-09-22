@@ -1,0 +1,149 @@
+SECTION B — CURSOR-READY CONTRACT (IMPLEMENTATION)
+
+B1) Contract Header
+• Contract Name: RunIdentity & Audit
+• Contract Type: Engine Law
+• Stage-2 Bucket: A (ENGINE LAW — FIXED INVARIANTS)
+• Slot Name: N/A
+• Determinism Level: Config-Bound
+
+
+
+B2) Purpose (max 2 sentences)
+Generate the run’s identity identifiers at execution start and return the per-run output directory identity required for run output containment. Emit the per-run creation timestamp used by the audit header.
+
+──────────────────────────────────────────────────────────────────
+NAVIGATION SUMMARY (NON-BINDING; ADD-ONLY) — Contract 1 (patched)
+Inserted: 2026-02-16T21:41:03Z (UTC)
+Purpose: Provide a names-only navigation index for explicit callable surfaces + top-level runtime IO.
+Governing text: If any conflict exists, the underlying contract B-sections govern.
+
+NON-BINDING navigation summary; if any conflict exists, the underlying B3/B4/B5/B6/B7 contract text governs.
+
+NAV_CALLABLES_AND_INVOKED_SERVICES (names/signatures as explicitly written)
+  • None explicitly declared in Contract 1 (patched)
+
+NAV_TOP_LEVEL_INPUTS (index; names only; sourced from explicit B3 interface fields)
+External call inputs (passed by invoker; names only):
+  • execution_mode
+  • instrument_id
+  • run_output_root
+
+Run-context inputs (initialization; read-only for run duration):
+  • None explicitly declared in Contract 1 (patched)
+
+Injected dependency inputs:
+  • None explicitly declared in Contract 1 (patched)
+
+Derived engine time primitives:
+  • None explicitly declared in Contract 1 (patched)
+
+NAV_TOP_LEVEL_OUTPUTS (index; names only; sourced from explicit B4 return declarations)
+Return objects:
+  • RunIdentityOutput
+
+NAV_SCHEMAS_AND_RECORDS_REFERENCED (index; names only; sourced from explicit IO record headings)
+  • RunIdentityInput
+  • RunIdentityOutput
+
+END OF NAVIGATION SUMMARY (NON-BINDING)
+──────────────────────────────────────────────────────────────────
+
+
+B3) Inputs (explicit interface)
+Invoker: RunHarness & Orchestration (orchestration Step 1)
+
+RunIdentityInput (from RunHarness) (required)
+• run_output_root: string
+  – environment-defined base directory under which per-run folders are created
+  – Alias: runs_root_dir (same concept/name used in run-harness orchestration)
+  – This value MUST correspond to the resolved config key: run_output_root (the invoker passes it in; this module MUST NOT resolve config)
+• execution_mode: string enum ∈ {backtest, replay, demo, live}
+• instrument_id: string
+
+Read-only vs mutable
+• All inputs are read-only; this module mutates no shared execution-state objects.
+
+Config keys
+• This module MUST NOT resolve configuration directly.
+• The value run_output_root is passed in by the invoker and is treated as an already-resolved environment base directory value (the key name “run_output_root” is authoritative elsewhere).
+
+
+
+B4) Outputs (explicit interface)
+RunIdentityOutput (returned to RunHarness) (required)
+• run_id: string
+• run_uuid: string
+• timestamp_utc_created: string
+• run_output_dir: string
+
+Output semantics (required)
+• run_id and run_uuid MUST be identical for the run (same value).
+• run_uuid is the required Run UUID field name used by audit/log schemas; it MUST equal run_id (no separate identifier is permitted).
+• run_output_dir MUST equal:
+  run_output_root + "/" + run_id + "/"
+
+Side effects / writes
+• None. This module MUST NOT write mandatory sinks, diagnostic sinks, or the audit header file.
+
+
+
+B5) Execution Timing & Invocation
+• Invoked exactly once per run as orchestration Step 1, before:
+  – TimeSemantics initialization (Step 2)
+  – ConfigResolver (Step 3)
+  – all other module construction and the run loop
+• Per-run only (never per-candle; never inside the run loop).
+• No suspension semantics are owned by this module (it must complete before the run loop begins).
+
+
+
+B6) Hard Guarantees
+Run identity invariants (required)
+• A single run identity value MUST exist per run and MUST be used consistently across:
+  – run output directory naming (run_output_dir = run_output_root + "/" + run_id + "/";      satisfies “runs/<run_id>/” containment under the chosen base root)
+  – audit header identity fields
+  – per-row log identity fields
+• run_id and Run UUID refer to the SAME single identifier value for a run.
+• This identifier value MUST be generated at execution start.
+• This identifier value MUST be unique per execution.
+• This identifier value MUST be unknown prior to execution.
+
+Determinism comparison allowance (required)
+• For determinism comparison between two runs using identical inputs, per-run identity fields (run_id / run_uuid) and the per-run creation timestamp (timestamp_utc_created) are excluded from equality checks; all other mandated outputs remain subject to determinism requirements.
+
+
+
+B7) Hard Prohibitions
+• MUST NOT read logs as inputs (logs are write-only sinks).
+• MUST NOT accept or consume any run identity override (run_id/run_uuid or equivalent) from config, RunRequest, CLI args, or environment variables; run identity MUST be generated at execution start only.
+• MUST NOT fabricate, infer, or “fill in” any missing values not explicitly provided by inputs or explicitly generated by this module (run_id/run_uuid/timestamp_utc_created/run_output_dir only).
+• MUST NOT implement or assume orchestration order, run loop logic, phase logic, pointer advancement, trade eligibility, measurement logic, risk math, or outcome logic.
+• MUST NOT write or partially-write audit_header.json (audit header write timing is outside this Step-1 boundary and must occur only when all required audit fields exist).
+• MUST NOT change run_output_root, and MUST NOT produce any run_output_dir structure other than:
+  run_output_root + "/" + run_id + "/"
+• MUST NOT create or rely on any additional run subfolder layout not explicitly defined in authoritative documents.
+• MUST NOT introduce defaults, stubs, or “best guess” behavior for any missing-source behavior (hard-fail instead if reached).
+
+
+
+B8) Swappability Rules
+N/A (no swappable provider slot is defined for this module in V1 authorities).
+
+
+
+B9) Failure Modes
+Fatal / halt conditions (run must be marked INVALID by the invoker)
+• Any required RunIdentityInput field is missing or empty (run_output_root, execution_mode, instrument_id).
+• execution_mode is not one of: {backtest, replay, demo, live}.
+• The module cannot generate a non-empty run identity value (run_id/run_uuid).
+• run_id != run_uuid.
+• The module cannot generate a non-empty timestamp_utc_created value.
+• run_output_dir does not exactly equal:
+  run_output_root + "/" + run_id + "/"
+
+Undefined-in-authority hard-fail boundaries
+• If runtime requires this module to supply any audit header fields beyond the RunIdentityOutput fields above (e.g., config snapshot hash, adapter version, dataset identity, module selection list, build id), that behavior is outside this contract and MUST hard-fail if incorrectly demanded from this module.
+
+
+—— END CONTRACT ——

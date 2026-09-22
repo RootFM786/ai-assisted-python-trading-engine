@@ -1,0 +1,16 @@
+{
+  "execution_mode": "backtest",
+  "evaluation_start_timestamp": "2025-01-01T00:00:00Z",
+  "evaluation_end_timestamp": "2025-01-02T00:00:00Z",
+  "adapter_type": "CSV",
+  "csv_paths": {
+    "M5": "examples/data/synthetic_m5.csv",
+    "H1": "examples/data/synthetic_h1.csv"
+  },
+  "strategy_provider": "withheld",
+  "execution_policy_provider": "single_trade",
+  "diagnostics_enabled": true,
+  "diagnostic_sinks_enabled": ["public_diagnostics.csv"],
+  "diagnostic_verbosity": "normal",
+  "run_output_root": "runs"
+}

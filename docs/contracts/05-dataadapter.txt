@@ -1,0 +1,302 @@
+SECTION B — CURSOR-READY CONTRACT (IMPLEMENTATION)
+
+B1) Contract Header
+• Contract Name: DataAdapter
+• Contract Type: Swappable
+• Stage-2 Bucket: C (Swappable Modules — Fixed Interfaces)
+• Slot Name (Swappable): DataAdapter
+• Determinism Level: Absolute
+
+
+
+B2) Purpose (max 2 sentences)
+Provide a deterministic, sequential stream of fully-closed, normalized candle events to the RunHarness, plus minimal adapter metadata required for audit stamping and gap handling.
+
+──────────────────────────────────────────────────────────────────
+NAVIGATION SUMMARY (NON-BINDING; ADD-ONLY) — Contract 5 (patched)
+Inserted: 2026-02-16T22:42:43Z (UTC)
+Purpose: Provide a names-only navigation index for explicit callable surfaces + top-level runtime IO.
+Governing text: If any conflict exists, the underlying contract B-sections govern.
+
+NON-BINDING navigation summary; if any conflict exists, the underlying B3/B4/B5/B6/B7 contract text governs.
+
+NAV_CALLABLES_AND_INVOKED_SERVICES (names/signatures as explicitly written)
+  • • next_event() -> AdapterEvent
+  • • get_timeframe_stream(timeframe) -> Iterable[NormalizedClosedCandle]
+  • • get_adapter_metadata() -> AdapterMetadata
+
+NAV_TOP_LEVEL_INPUTS (index; names only; sourced from explicit interface surfaces)
+External call inputs (callable signature params):
+  • timeframe
+
+Run-context inputs (initialization; read-only for run duration):
+  • instrument_id
+  • execution_mode
+  • adapter_input
+  • ResolvedConfigSnapshot
+  • TimeSemanticsContext
+
+Injected dependency inputs:
+  • None explicitly declared in Contract 5 (patched)
+
+Derived engine time primitives:
+  • None explicitly declared in Contract 5 (patched)
+
+NAV_TOP_LEVEL_OUTPUTS (index; names only; sourced from explicit return declarations)
+Return objects:
+  • AdapterEvent
+  • Iterable[NormalizedClosedCandle]
+  • AdapterMetadata
+
+NAV_SCHEMAS_AND_RECORDS_REFERENCED (index; names only; sourced from IO typing/return declarations)
+  • AdapterEvent
+  • AdapterMetadata
+  • NormalizedClosedCandle
+  • ResolvedConfigSnapshot
+  • TimeSemanticsContext
+
+END OF NAVIGATION SUMMARY (NON-BINDING)
+
+──────────────────────────────────────────────────────────────────
+
+
+B3) Inputs (explicit interface)
+Fixed inputs (all implementations)
+• instrument_id (from RunRequest) — required.
+• execution_mode (from RunRequest) — required (must allow distinction between finite vs indefinite modes).
+
+• adapter_input (from RunRequest) — required (passed through to DataAdapter construction)
+  – adapter_type: string enum ∈ {CSV, BROKER}
+  – adapter_params: object (required; adapter-owned schema; RunHarness MUST NOT validate internal keys)
+
+• ResolvedConfigSnapshot (read-only; produced by ConfigResolver) — OPTIONAL for DataAdapter.
+  – If provided to DataAdapter construction, it may supply adapter selection keys for validation/cross-checking:
+    • adapter_type (REQUIRED in snapshot; Values include CSV | BROKER)
+    • csv_paths (REQUIRED iff adapter_type=CSV) with keys:
+      – M5: PathOrPaths (REQUIRED)
+      – H1: PathOrPaths (REQUIRED)
+      – M1: PathOrPaths (OPTIONAL; accepted but ignored unless an M1-aware consumer is explicitly enabled)
+    • broker_adapter_id (INTERFACE-ONLY; accepted but ignored in V1 unless adapter_type=BROKER)
+    • broker_credentials (INTERFACE-ONLY; shape acknowledged; never required in V1; MUST NOT cause failure if absent unless BROKER adapter is selected)
+
+• TimeSemanticsContext (read-only) — REQUIRED dependency for UTC validation and derived-close derivation (must be injected by RunHarness at Step 2 and made available to later steps).
+
+Adapter selection reconciliation (LOCKED — deterministic; prevents ambiguous selection)
+• If ResolvedConfigSnapshot is provided to DataAdapter construction:
+  – ResolvedConfigSnapshot.adapter_type MUST equal adapter_input.adapter_type; mismatch → HARD FAIL (run INVALID).
+  – If adapter_input.adapter_params contains any adapter-selection fields that also exist in ResolvedConfigSnapshot (e.g., csv_paths / broker_adapter_id / broker_credentials), they MUST match the snapshot values; mismatch → HARD FAIL.
+• If ResolvedConfigSnapshot is not provided to DataAdapter construction:
+  – DataAdapter MUST rely solely on adapter_input for adapter selection and any required adapter parameters.
+
+CSV adapter input details (adapter_type=CSV)
+• csv_paths.M5 and csv_paths.H1 must resolve to PathOrPaths (string OR array of strings).
+• If PathOrPaths is an array: deterministic concatenation is required; overlaps/duplicates/non-monotonic time across concatenated dataset → HARD FAIL (adapter-side enforcement).
+• Each referenced CSV file MUST contain required columns sufficient to emit the normalized candle fields:
+  – time (authoritative candle OPEN timestamp, UTC)
+  – open
+  – high
+  – low
+  – close
+  Missing any required column → HARD FAIL.
+• csv_paths is interpreted as dataset for run’s instrument_id; if dataset/instrument mismatch can be detected → HARD FAIL rather than proceed.
+
+
+
+B4) Outputs (explicit interface)
+Primary runtime emission interface (fixed)
+• DataAdapter MUST expose a single sequential event API used by RunHarness:
+  – next_event() → AdapterEvent
+
+Secondary query interfaces (LOCKED; required for V1 wiring determinism)
+
+A) Multi-timeframe facility — get_timeframe_stream(timeframe) → Iterable[NormalizedClosedCandle]
+• Required support:
+  – timeframe="H1" MUST be supported whenever HTFBiasProvider is enabled.
+• Finite modes (backtest/replay):
+  – The H1 stream MUST be available at run start (i.e., callable immediately after adapter construction).
+  – Returned candles MUST be strictly chronological by candle_open_time_utc and must use the same NormalizedClosedCandle schema.
+• Indefinite modes (demo/live):
+  – If the adapter cannot supply timeframe="H1" while HTFBiasProvider is enabled, the adapter MUST hard-fail at construction (run INVALID).
+
+B) Adapter metadata — get_adapter_metadata() → AdapterMetadata
+AdapterMetadata (minimum required fields):
+• adapter_type: string
+• adapter_version: string (deterministic identifier of the adapter implementation)
+• historical_expected: bool
+• source_range_info: object
+  – For each supplied timeframe key, include:
+    * earliest_open_time_utc: timezone-aware UTC datetime
+    * latest_open_time_utc: timezone-aware UTC datetime
+• dataset_identity: object (finite modes)
+  – MUST include the resolved CSV path(s) actually used per timeframe (at minimum M5 + H1 when adapter_type=CSV)
+  – MAY include a deterministic dataset_hash/identifier if available (optional)
+
+NOTE (LOCKED): RunHarness / RunIdentity use AdapterMetadata to populate the required audit header fields (adapter_type, adapter_version, input dataset identity).
+
+
+AdapterEvent (tagged union; exactly one)
+A) CandleEvent
+• event_type: "CANDLE"
+• candle: NormalizedClosedCandle
+
+B) EOFEvent
+• event_type: "EOF"
+
+C) AdapterErrorEvent
+• event_type: "ERROR"
+• error_code: string
+• error_message: string
+
+NormalizedClosedCandle (canonical candle object)
+Required fields:
+• candle_open_time_utc: timezone-aware UTC datetime (REQUIRED)
+• open: float
+• high: float
+• low: float
+• close: float
+Optional fields:
+• candle_close_time_utc: timezone-aware UTC datetime (OPTIONAL; derived close timestamp) OR absent.
+• volume: float | null (optional)
+
+Alias clarification (LOCKED)
+• open_time_utc is an alias of candle_open_time_utc.
+• If an adapter emits both open_time_utc and candle_open_time_utc, they MUST be identical; if they differ → HARD FAIL (invalid adapter output).
+
+Derived close timestamp definition (LOCKED)
+• If candle_close_time_utc (or derived_close_timestamp) is present, it MUST equal:
+  – candle_open_time_utc + timeframe duration, with timeframe treated as a fixed constant (M5=5 minutes; H1=60 minutes),
+  – computed using UTC arithmetic (no timezone offsets),
+  – and MUST NOT be sourced from broker-reported close times.
+• If candle_close_time_utc is absent:
+  – the derived close timestamp MUST be treated as candle_open_time_utc + timeframe duration (M5=5 minutes; H1=60 minutes), computed using UTC arithmetic (no timezone offsets).
+
+EOF surfacing constraint (fixed)
+• EOFEvent is surfaced ONLY to the RunHarness (loop controller).
+• ExecutionStateMachine MUST receive CandleEvent.candle only.
+• EOFEvent MUST NOT be passed into ExecutionStateMachine as an engine input.
+
+Multi-timeframe support (V1 requirement)
+• H1 candles MUST be supplied as a separate H1 candle stream emitted by the DataAdapter.
+• The DataAdapter MUST NOT fabricate H1 by aggregating M5 inside the engine.
+
+Historical availability reporting (best-effort; fixed requirement)
+• DataAdapter MUST expose:
+  – historical_expected: bool
+    • True for finite sources (backtest/replay CSV)
+    • False for live-like sources
+  – source_range_info (best-effort) describing earliest and latest available candle_open_time_utc for each timeframe stream.
+• If historical_expected is True and source_range_info cannot be computed (e.g., unreadable dataset), the adapter MUST emit AdapterErrorEvent (or otherwise cause HARD FAIL per Failure Modes).
+
+Adapter identity for audit (required for RunHarness audit header)
+• DataAdapter MUST expose adapter identity + dataset identity via the adapter metadata API defined in this contract:
+  – get_adapter_metadata() → AdapterMetadata
+• RunHarness obtains the required audit header fields from AdapterMetadata, including:
+  – adapter_type
+  – adapter_version
+  – dataset identity (finite modes)
+HARD FAIL BOUNDARY (LOCKED):
+• If get_adapter_metadata() is absent, not callable at/after adapter construction, or returns missing required fields needed by the audit header, the run MUST hard-fail and be marked INVALID.
+
+Broker fills (interface-only)
+• In BROKER mode only: if broker-reported fill objects are emitted, their exact schema must match the authoritative “BrokerFill” schema (as defined in the Data Adapter Pack).
+• In V1, broker fills are interface-only and must not be required for correctness.
+
+
+
+B5) Execution Timing & Invocation
+Construction timing (RunHarness orchestration order)
+• DataAdapter is constructed once per run as Step 6 in the RunHarness orchestration order, after logger sink construction and before ExecutionStateMachine construction.
+
+Invocation cadence
+• RunHarness MUST call next_event() repeatedly in a single-threaded, forward-only loop to consume adapter outputs strictly sequentially and in chronological order.
+• For each CandleEvent returned:
+  – exactly one candle is emitted (one event = one candle).
+  – RunHarness MUST invoke exactly one ExecutionStateMachine step, passing CandleEvent.candle as the sole market-data input.
+
+Mode interaction
+• In finite modes (backtest/replay):
+  – DataAdapter MUST eventually return exactly one EOFEvent after the final CandleEvent.
+• In indefinite modes (demo/live):
+  – DataAdapter MUST never return EOFEvent.
+
+Post-EOF rule (finite modes)
+• After returning EOFEvent, DataAdapter MUST NOT return any further events.
+• Returning any CandleEvent after EOFEvent → HARD FAIL (invalid adapter output).
+
+
+
+B6) Hard Guarantees
+Determinism & ordering
+• Candle stream MUST be strictly chronological by candle_open_time_utc.
+• No duplicates (same candle_open_time_utc) are permitted in the emitted stream.
+• The adapter MUST NOT return candle “batches”; one event yields at most one candle.
+
+Normalization & closure
+• Every emitted candle MUST represent a fully closed candle.
+• candle_open_time_utc MUST be timezone-aware UTC.
+• OHLC validity (LOCKED):
+  – high ≥ max(open, close)
+  – low ≤ min(open, close)
+  – high ≥ low
+  – no NaN/inf values
+  Violations → HARD FAIL (invalid adapter output).
+• If volume is provided, it MUST NOT affect trading behaviour unless explicitly consumed by an authoritative downstream rule (V1: no such consumption defined here).
+
+Missing candle representation (Gap #8 support)
+• Missing candles MUST be represented by absence in the stream (i.e., time gaps between consecutive candles).
+• The adapter MUST NOT synthesize or “fill” missing candles under any circumstance.
+
+
+
+B7) Hard Prohibitions
+Global execution-safety prohibitions (apply to all implementations)
+• MUST NOT read any logs (mandatory or diagnostic) as inputs.
+• MUST NOT reorder adapter outputs.
+• MUST NOT batch multiple candles into one engine step.
+• MUST NOT skip adapter outputs.
+• MUST NOT synthesize candles or timing events.
+• MUST NOT fabricate missing candles.
+• MUST NOT emit EOFEvent in indefinite modes (demo/live).
+• MUST NOT emit any events after EOFEvent in finite modes.
+• MUST NOT mutate execution state owned by other modules (ExecutionStateMachine state, trade state, risk state, logger state).
+• MUST NOT introduce defaults for any behaviour that is UNDEFINED IN AUTHORITY (must hard-fail if reached).
+
+
+
+B8) Swappability Rules
+Fixed interface
+• All DataAdapter implementations (CSV / BROKER / future adapters) MUST conform to:
+  – next_event() → AdapterEvent (CandleEvent | EOFEvent | AdapterErrorEvent)
+  – canonical NormalizedClosedCandle schema (including alias rule for open_time_utc)
+  – mode interaction and post-EOF constraints
+  – no-fabrication rule
+
+Replaceable implementation
+• The engine (RunHarness + ExecutionStateMachine) MUST NOT special-case adapter behaviour based on implementation identity, beyond adapter_type selection and mode constraints explicitly defined by authoritative text.
+• Any additional methods, metadata surfaces, or helper APIs are permitted only if they do not change the fixed interface contract and do not affect mandatory sink outputs.
+
+Interface-only boundaries (BROKER + fills)
+• BROKER mode is V1 interface-only unless and until a later version defines broker connection semantics.
+• If BROKER mode is selected in V1 without full broker behaviour authority, the DataAdapter MUST HARD FAIL at run start with “UNDEFINED IN AUTHORITY — BROKER DataAdapter behaviour”.
+
+H1 stream boundary
+• The V1 requirement “H1 candle stream supplied by the DataAdapter” is satisfied via the multi-timeframe facility defined in this contract:
+  – get_timeframe_stream(timeframe) → Iterable[NormalizedClosedCandle]
+  – Required support: timeframe="H1" when HTFBiasProvider is enabled.
+HARD FAIL BOUNDARY (LOCKED):
+• If any downstream module requires H1 candles (e.g., HTFBiasProvider enabled) and the adapter cannot supply timeframe="H1" via get_timeframe_stream("H1"), the run MUST hard-fail rather than invent an interface.
+
+
+B9) Failure Modes
+Fatal / hard-fail (run INVALID) conditions include:
+• Any adapter output ordering violation (non-chronological candle_open_time_utc, duplicates, non-monotonic time).
+• Any candle that is not fully closed, or lacks required NormalizedClosedCandle fields.
+• Any non-UTC candle_open_time_utc, or non–timezone-aware timestamp.
+• Any OHLC invalidity or non-finite numeric values (NaN/inf) in an emitted candle (invalid adapter output).
+• Any required CSV input violation (missing required columns; invalid PathOrPaths; overlaps/duplicates/non-monotonic across concatenated files; unreadable dataset; detectable instrument mismatch).
+• Any AdapterErrorEvent emitted (RunHarness must hard-fail on adapter error/violation).
+• EOFEvent emitted in indefinite modes (demo/live).
+• Any event emitted after EOFEvent (finite modes).
+• Adapter selection in V1 (LOCKED scope):
+  – adapter_type=CSV is supported (V1).
+  – adapter_type ∈ {BROKE

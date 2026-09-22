@@ -1,0 +1,2 @@
+Entry candle timestamp,Direction,Entry price,Stop loss,TP1,Final outcome,Exit timestamp
+2025-01-01T00:00:00Z,LONG,100.0,99.0,101.0,win,2025-01-01T00:05:00Z

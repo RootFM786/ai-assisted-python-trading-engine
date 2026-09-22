@@ -1,0 +1,177 @@
+SECTION B — CURSOR-READY CONTRACT (IMPLEMENTATION)
+
+B1) Contract Header
+• Contract Name: Clock & TimeSemantics
+• Contract Type: Engine Law
+• Stage-2 Bucket: A (ENGINE LAW — FIXED INVARIANTS)
+• Slot Name: N/A
+• Determinism Level: Absolute
+
+
+
+B2) Purpose (max 2 sentences)
+Define and supply the single canonical time-basis primitives used by the engine, including UTC-only timestamp enforcement via assertion and mechanical candle open→close derivation. Ensure all downstream timing language (“candle close”, “now”, time-window comparisons) is evaluated on a derived-close UTC basis, not raw open timestamps or wall-clock time.
+
+──────────────────────────────────────────────────────────────────
+NAVIGATION SUMMARY (NON-BINDING; ADD-ONLY) — Contract 2 (patched)
+Inserted: 2026-02-16T22:05:59Z (UTC)
+Purpose: Provide a names-only navigation index for explicit callable surfaces + top-level runtime IO.
+Governing text: If any conflict exists, the underlying contract B-sections govern.
+
+NON-BINDING navigation summary; if any conflict exists, the underlying B3/B4/B5/B6/B7 contract text governs.
+
+NAV_CALLABLES_AND_INVOKED_SERVICES (names/signatures as explicitly written)
+  • • utc_assert(timestamp)
+  • • derive_close_timestamp(timeframe, open_timestamp_utc)
+
+NAV_TOP_LEVEL_INPUTS (index; names only; sourced from explicit callable/invocation surfaces)
+External call inputs (signature params):
+  • open_timestamp_utc
+  • timeframe
+  • timestamp
+
+Run-context inputs (initialization; read-only for run duration):
+  • None explicitly declared in Contract 2 (patched)
+
+Injected dependency inputs:
+  • None explicitly declared in Contract 2 (patched)
+
+Derived engine time primitives:
+  • now_utc
+
+NAV_TOP_LEVEL_OUTPUTS (index; names only; sourced from explicit return declarations)
+Return objects:
+  • TimeSemanticsContext
+
+NAV_SCHEMAS_AND_RECORDS_REFERENCED (index; names only; sourced from IO typing/return declarations)
+  • TimeSemanticsContext
+
+END OF NAVIGATION SUMMARY (NON-BINDING)
+
+──────────────────────────────────────────────────────────────────
+
+
+B3) Inputs (explicit interface)
+Invoker:
+• RunHarness & Orchestration (orchestration Step 2) constructs the TimeSemanticsContext once per run.
+
+Runtime method inputs (TimeSemanticsContext):
+1) utc_assert(timestamp)
+• timestamp: timezone-aware UTC datetime (required)
+
+2) derive_close_timestamp(timeframe, open_timestamp_utc)
+• timeframe: string enum ∈ {M5, H1} (required)
+• open_timestamp_utc: timezone-aware UTC datetime (required; candle OPEN timestamp)
+
+State refs:
+• None. This module/context must not require shared execution state objects.
+
+Config keys:
+• None consumed directly.
+
+
+
+B4) Outputs (explicit interface)
+Primary output (per-run):
+• TimeSemanticsContext (immutable for the run)
+
+TimeSemanticsContext provides:
+1) utc_assert(timestamp)
+• Returns: void (no return value)
+• Effect: verifies timestamp is timezone-aware UTC; if not, the run MUST hard-fail at the moment the violation is detected.
+
+2) derive_close_timestamp(timeframe, open_timestamp_utc)
+• Returns: timezone-aware UTC datetime (derived candle close timestamp)
+• Effect: returns derived candle close timestamp using the Mechanical Appendix definition for derived close timestamps.
+
+Derived value defined by Engine Law (not stored by this module):
+• now_utc: the canonical engine-wide “current time” value during pointer evaluation, defined as the DERIVED M5 candle close timestamp (UTC) of the current pointer candle being evaluated.
+
+State mutations:
+• None.
+
+Events / signals:
+• None.
+
+Owned log writes:
+• None. (This module does not own any sink.)
+
+
+
+B5) Execution Timing & Invocation
+Initialization cadence:
+• Per-run.
+• The TimeSemanticsContext MUST be constructed by RunHarness at orchestration Step 2.
+
+Wiring / availability constraints:
+• The TimeSemanticsContext MUST be made available to all later orchestration steps (Steps 3–7) via constructor injection (or equivalent explicit wiring), such that downstream modules do not create competing or divergent time-basis objects.
+
+Runtime usage cadence:
+• derive_close_timestamp may be called wherever a derived candle close timestamp is required.
+• utc_assert may be called wherever UTC-only enforcement is required.
+• During pointer execution, modules obtain now_utc only from the engine pointer context for the currently evaluated candle.
+
+
+
+B6) Hard Guarantees
+UTC-only guarantee:
+• The canonical timestamp type for V1 is timezone-aware UTC datetime.
+• utc_assert enforces this contract: any non-UTC-aware timestamp MUST hard-fail the run at the moment the violation is detected.
+• UTC localization occurs once, immediately upon adapter ingestion.
+• No timestamp may be altered, shifted, rounded, or re-parsed after localization.
+• All timestamp comparisons (<, >, ==, in) assume UTC-aware datetime objects.
+
+Candle open→close derivation guarantee (mechanical, deterministic):
+• The adapter-provided candle timestamp is the candle OPEN time (UTC).
+• All “candle close” logic in Phase 1–3 uses derived close time:
+  – M5 close = open_time + 5 minutes
+  – H1 close = open_time + 1 hour
+• The raw open timestamp MUST NEVER be treated as a candle close timestamp.
+
+Canonical “NOW” guarantee (pointer execution):
+• now_utc is the canonical engine-wide “current time” value.
+• now_utc equals the derived M5 candle close timestamp (UTC) of the current pointer candle being evaluated.
+
+Comparison basis guarantee (engine-wide timing language):
+• Any rule that references “now”, “current time”, “at candle close”, “entry time”, “confirmation_time”, or equivalent timing language during pointer execution MUST use derived candle close timestamps and/or now_utc (as defined above), not wall-clock time or raw candle open timestamps.
+
+Timestamp serialization (engine-wide; mandatory sinks):
+• All timestamps written to mandatory sink CSVs MUST be serialized as UTC ISO-8601 with “Z” suffix (YYYY-MM-DDTHH:MM:SSZ).
+• No fractional seconds are permitted.
+
+Single-context guarantee:
+• TimeSemantics initialization produces exactly one immutable TimeSemanticsContext object for the run.
+
+
+
+B7) Hard Prohibitions
+This module/context MUST NOT:
+• read logs as inputs (directly or indirectly)
+• query wall-clock/system time to define “now/current time” for pointer execution (only now_utc as defined is permitted)
+• perform timezone conversion beyond the UTC-only contract (no shifting between timezones)
+• alter, shift, round, or re-parse adapter-provided open timestamps after UTC localization (it may only assert UTC-awareness and derive close timestamps mechanically)
+• treat raw candle open timestamps as candle close timestamps
+• fabricate, interpolate, bridge, or infer missing timestamps or candles
+• construct or allow the existence of multiple competing time-basis objects for a single run
+• embed strategy logic, phase logic, pointer advancement, trade decisions, or outcome logic
+
+
+
+B8) Swappability Rules
+Not applicable (not a swappable slot in V1).
+
+
+
+B9) Failure Modes
+Fatal (halt run; mark run INVALID):
+• TimeSemanticsContext cannot be constructed at orchestration Step 2.
+• utc_assert is invoked on any timestamp that is not timezone-aware UTC.
+• derive_close_timestamp is invoked with:
+  – a timeframe outside {M5, H1}, or
+  – an open_timestamp_utc that is not timezone-aware UTC.
+• Any module attempts to define “now/current time” for pointer execution using wall-clock/system time instead of now_utc.
+• Any competing or divergent “time semantics” object is constructed independently by downstream modules for the same run (if detected).
+
+
+
+—— END CONTRACT ——

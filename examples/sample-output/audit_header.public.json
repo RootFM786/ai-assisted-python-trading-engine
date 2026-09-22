@@ -1,0 +1,12 @@
+{
+  "run_id": "synthetic-audit-example",
+  "execution_mode": "backtest",
+  "adapter_type": "CSV",
+  "resolved_config_snapshot_hash": "synthetic-example-not-production",
+  "module_selection": [
+    {"name": "ExecutionStateMachine", "version": "contract_6"},
+    {"name": "DataAdapter", "version": "contract_5"},
+    {"name": "StrategyDecisionProvider", "version": "criteria-withheld"}
+  ],
+  "note": "Representative public audit schema; not a historical trading run."
+}
