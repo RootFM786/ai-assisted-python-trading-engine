@@ -1,2 +1,2 @@
-# deterministic-python-trading-engine
-Contract-led Python trading engine demonstrating deterministic state management, backtesting, verification, audit logging and AI-assisted software engineering.
+# AI-Assisted Python Trading Engine
+A Python automation project focused on prompt engineering, deterministic system design, backtesting, verification and MT5 integration.
